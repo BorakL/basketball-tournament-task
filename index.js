@@ -1,11 +1,8 @@
 import groups from "./data/groups.json" assert { type: "json" };
-import { groupStageMatches, stagesDefinitions, teamInitStatistics, tournamentStages } from "./definitions/definitions.js";
-
-// console.log(groups)
-  
+import { groupStageMatches, stagesDefinitions, teamInitStatistics } from "./definitions/definitions.js";
+import { sortGroupTeams, sortTeams } from "./utils/utils.js";
 
 const groupsKeys = Object.keys(groups)
-console.log(groupsKeys)
 
 const teams = {};
 groupsKeys.forEach(group => groups[group].forEach(team => 
@@ -19,78 +16,71 @@ const tournament = {
     totalTeam: 12,
     winner: "",
     stages: {
-        groupStage: {
-            "A": [],
-            "B": [],
-            "C": []
-        }, 
+        groupStage: [], 
         quarterFinals: [],
         semiFinals: [],
         finals: [] 
     }, 
-    teams
+    teams: {...teams}
 } 
 
 
 
-const matchesData = [];
 
-const updateTeamStats = (tournament, team, update, stageInfo) => {
-    if(!Object.values(tournamentStages).includes(stageInfo.stage)){
+const updateTeamStats = (tournament, team, update, stage) => {
+    if(!Object.values(stagesDefinitions).includes(stage)){
         throw new Error("Invalid stage!")
     }
-    if(stageInfo.stage === "group"){
-        if(!groupsKeys.includes(stageInfo.group) || ![1,2,3].includes(stageInfo.phase)){
-            throw new Error("Invalid group stage info!")
-        }
+    if(!Object.values(teams).find(t => t.ISOCode === team)){
+        throw new Error("Invalid team asdfasdf!")
     }
-    
-    // let overalStats = tournament.teams[team]?.overalStats; 
-    // if(!overalStats){
-    //     overalStats = {...teamInitStatistics}
-    // }
-
 
     let groupStageStats = tournament.teams[team]?.groupStageStats 
                             ? {...tournament.teams[team].groupStageStats}
+                            : {...teamInitStatistics, points:0}
+    let overallStats = tournament.teams[team]?.overallStats
+                            ? {...tournament.teams[team].overallStats}
                             : {...teamInitStatistics}
+    
+    tournament.teams = tournament.teams || {};
+    tournament.teams[team] = tournament.teams[team] || {};
 
-    switch(stageInfo.stage){
-        case stagesDefinitions.group: {
-            for(let key in update){
-                if(groupStageStats.hasOwnProperty(key)){
-                    groupStageStats[key] += update[key]
-                }
+    if(stage===stagesDefinitions.groupStage){
+        for(let key in update){
+            if(groupStageStats.hasOwnProperty(key)){
+                groupStageStats[key] += update[key]
             }
-            tournament.teams = tournament.teams || {};
-            tournament.teams[team] = tournament.teams[team] || {};
-            tournament.teams[team].groupStageStats = groupStageStats;
-            //overallStats
-            break;
         }
-        
-    } 
-
+        tournament.teams[team].groupStageStats = groupStageStats; 
+    }
+    for(let key in update){
+        if(overallStats.hasOwnProperty(key)){
+            overallStats[key] += update[key]
+        }
+    }
+    tournament.teams[team].overallStats = overallStats;
 }
 
 
-const addMatch = (tournament, match, stageInfo) => {
-    const { group, quarterfinals, semifinals, finals } = stagesDefinitions;
-    if(!Object.values(tournamentStages).includes(stageInfo.stage)){
+const addMatch = (tournament, match, stage) => {
+    const { groupStage, quarterfinals, semifinals, finals } = stagesDefinitions;
+    if(!Object.values(stagesDefinitions).includes(stage)){
         throw new Error("Invalid stage!")
     }
-    if(stageInfo.stage === group){
-        if(!groupsKeys.includes(stageInfo.group) || ![1,2,3].includes(stageInfo.round)){
+    if(stage === groupStage){
+        let group = match.info?.group;
+        let round = match.info?.round;
+        if(!group || !round || !groupsKeys.includes(group)){
             throw new Error("Invalid group stage info!")
         }
     }
+
     tournament.stages = tournament.stages || {};
      
-    switch(stageInfo.stage){
-        case group: {
-            tournament.stages[group] = tournament.stages.groupStage || {};
-            tournament.stages[group][stageInfo.group] = tournament.stages.groupStage[stageInfo.group] || [];
-            tournament.stages[group][stageInfo.group].push(match);
+    switch(stage){
+        case groupStage: {
+            tournament.stages[groupStage] = tournament.stages[groupStage] || {};
+            tournament.stages[groupStage].push(match);
             break;
         };
         case quarterfinals: {
@@ -112,11 +102,10 @@ const addMatch = (tournament, match, stageInfo) => {
 }
 
 
-const match = (team1, team2, tournament, stageInfo) => {
-    console.log("team1", team1)
-    console.log("team2", team2)
+const match = (team1, team2, tournament, info) => {
     const max = 80;
     const min = 70;
+    const{stage} = info
 
     let disqualification = Math.ceil(Math.random()*100)
     let t1Points, t2Points;
@@ -131,8 +120,7 @@ const match = (team1, team2, tournament, stageInfo) => {
         t2Points = 0;
         t1PointsScored = 20;
         t2PointsScored = 0;
-    }else{
-        //Pazi ovde da ne može da se nađe isti rezultat
+    }else{ 
         t1PointsScored = Math.ceil(Math.random()*(max-min)+min)
         t2PointsScored = Math.ceil(Math.random()*(max-min)+min)
         t1Points = t1PointsScored > t2PointsScored ? 2 : 1;
@@ -140,6 +128,7 @@ const match = (team1, team2, tournament, stageInfo) => {
     }
  
     let team1Update = {
+        games:1,
         wins: t1Points>t2Points ? 1 : 0,
         loses: t1Points<t2Points ? 1 : 0,
         pointsScored: t1PointsScored,
@@ -147,6 +136,7 @@ const match = (team1, team2, tournament, stageInfo) => {
         pointDifference: t1PointsScored-t2PointsScored
     }
     let team2Update = {
+        games:1,
         wins: t2Points>t1Points ? 1 : 0,
         loses: t2Points<t1Points ? 1 : 0,
         pointsScored: t2PointsScored,
@@ -154,8 +144,13 @@ const match = (team1, team2, tournament, stageInfo) => {
         pointDifference: t2PointsScored-t1PointsScored
     }
 
-    updateTeamStats(tournament, team1.ISOCode, team1Update, stageInfo)
-    updateTeamStats(tournament, team2.ISOCode, team2Update, stageInfo)
+    if(stage==="groupStage"){
+        team1Update = {...team1Update, points: t1Points}
+        team2Update = {...team2Update, points: t2Points}
+    }
+
+    updateTeamStats(tournament, team1.ISOCode, team1Update, stage)
+    updateTeamStats(tournament, team2.ISOCode, team2Update, stage)
 
     let matchData = {
         [team1.ISOCode]:{
@@ -166,27 +161,48 @@ const match = (team1, team2, tournament, stageInfo) => {
             team: team2.Team,
             score: t2PointsScored
         },
-        stageInfo
+        info
     }
-    addMatch(tournament, matchData, stageInfo)
+
+    addMatch(tournament, matchData, stage)
 }
 
+ 
+groupStageMatches.forEach((round,i) => {
+    round.forEach((positions) => 
+        groupsKeys.forEach(g => 
+            match(
+                groups[g][positions[0]-1], 
+                groups[g][positions[1]-1], 
+                tournament, 
+                {stage: stagesDefinitions.groupStage, round:i+1, group:g }
+            )
+        )
+    )
+})
 
-// groupStageMatches.forEach((round,i) => {
-//     console.log(`round: ${i+1} ///////////////////`)
-//     round.forEach((positions) => {
-//         groups.forEach(g => 
-//         {
-//             matchesData.push( { ...match(groups[g][positions[0]-1], groups[g][positions[1]-1]), group: g, round:i+1}  )
-//         })
-//     })
-// } )
+const sortedGroupTeams = sortGroupTeams(tournament)
 
+const firstInGroups = [];
+const secondInGroups = [];
+const thirdInGroups = [];
 
-// const groupStageStatistics = groupStageMatchesData.reduce((a,b)=>{
-    
-// })
+sortedGroupTeams.forEach(g => {
+    firstInGroups.push(g[0]);
+    secondInGroups.push(g[1]);
+    thirdInGroups.push(g[2]);
+})
 
+const storedBetweenGroups = [firstInGroups,secondInGroups,thirdInGroups];
 
+const groupStageList = {};
+let i = 1;
+storedBetweenGroups.forEach(g => {
+    let sortedTeams = sortTeams(g);
+    sortedTeams.forEach(s => {
+        groupStageList[i]=s;
+        i++;
+    })
+}) 
 
-// console.log("groupStageMatches", matchesData)
+console.log("groupStageList",groupStageList) 

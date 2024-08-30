@@ -5,6 +5,7 @@ export const groupStageMatches = [
 ]
 
 export const teamInitStatistics = {
+    games:0,
     wins:0,
     loses:0,
     pointsScored:0,
@@ -13,7 +14,7 @@ export const teamInitStatistics = {
 }
 
 export const stagesDefinitions = {
-    group: "group",
+    groupStage: "groupStage",
     quarterfinals: "quarterfinals",
     semifinals: "semifinals",
     finals: "finals"
