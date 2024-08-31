@@ -1,6 +1,6 @@
 import groups from "./data/groups.json" assert { type: "json" };
-import { groupStageMatches, stagesDefinitions, teamInitStatistics } from "./definitions/definitions.js";
-import { sortGroupTeams, sortTeams } from "./utils/utils.js";
+import { groupStageMatches, pots, stagesDefinitions, teamInitStatistics } from "./definitions/definitions.js";
+import { pairTeams, sortGroupTeams, sortTeams } from "./utils/utils.js";
 
 const groupsKeys = Object.keys(groups)
 
@@ -17,8 +17,8 @@ const tournament = {
     winner: "",
     stages: {
         groupStage: [], 
-        quarterFinals: [],
-        semiFinals: [],
+        quarterfinals: [],
+        semifinals: [],
         finals: [] 
     }, 
     teams: {...teams}
@@ -106,6 +106,9 @@ const match = (team1, team2, tournament, info) => {
     const max = 80;
     const min = 70;
     const{stage} = info
+    if(!stage){
+        throw new Error ("Invalid stage data!")
+    }
 
     let disqualification = Math.ceil(Math.random()*100)
     let t1Points, t2Points;
@@ -203,6 +206,23 @@ storedBetweenGroups.forEach(g => {
         groupStageList[i]=s;
         i++;
     })
-}) 
+})
+
+const quarterFinalsMatches = pots.map(matches => pairTeams(matches, groupStageList, tournament.stages.groupStage))
+quarterFinalsMatches.forEach((pot,i) => {
+    pot.forEach(m => {
+        let team1 = groupStageList[m[0]]
+        let team2 = groupStageList[m[1]]
+        match(team1,team2,tournament,{pot:i+1, stage: stagesDefinitions.quarterfinals})
+    })
+})
+
+const quarterfinalsMatchesPot1 = quarterFinalsMatches.filter(q => q.info.pot===1)
+const quarterfinalsMatchesPot2 = quarterFinalsMatches.filter(q => q.info.pot===2)
+
+
+console.log(tournament.stages.quarterfinals)
+
+console.log("matchedTeams",quarterFinalsMatches)
 
 console.log("groupStageList",groupStageList) 
