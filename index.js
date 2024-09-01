@@ -1,6 +1,6 @@
 import groups from "./data/groups.json" assert { type: "json" };
 import { groupStageMatches, pots, stagesDefinitions, teamInitStatistics } from "./definitions/definitions.js";
-import { pairTeams, sortGroupTeams, sortTeams } from "./utils/utils.js";
+import { getResultRange, pairTeams, sortGroupTeams, sortTeams } from "./utils/utils.js";
 
 const groupsKeys = Object.keys(groups)
 
@@ -32,7 +32,7 @@ const updateTeamStats = (tournament, team, update, stage) => {
         throw new Error("Invalid stage!")
     }
     if(!Object.values(teams).find(t => t.ISOCode === team)){
-        throw new Error("Invalid team asdfasdf!")
+        throw new Error(`Invalid ISOCode: ${team}`)
     }
 
     let groupStageStats = tournament.teams[team]?.groupStageStats 
@@ -103,66 +103,87 @@ const addMatch = (tournament, match, stage) => {
 
 
 const match = (team1, team2, tournament, info) => {
-    const max = 80;
-    const min = 70;
+
+    let [team1Min, team1Max] = getResultRange(team1,tournament);
+    let [team2Min,team2Max] = getResultRange(team2,tournament);
+    const luckFactor = Math.floor(Math.random()*10);
+    team1Max += team1Max<=team2Min ? team2Min-team1Max+luckFactor : 0;
+    team2Max += team2Max<=team1Min ? team1Min-team2Max+luckFactor : 0;
+
     const{stage} = info
     if(!stage){
         throw new Error ("Invalid stage data!")
     }
 
     let disqualification = Math.ceil(Math.random()*100)
+
+    let t1Score, t2Score;
     let t1Points, t2Points;
-    let t1PointsScored, t2PointsScored;
-    if(disqualification===1){
+    let winnerTeam, looserTeam;
+
+    if(disqualification===1){ 
+        t1Score = 0;
+        t2Score = 2;
         t1Points = 0;
-        t2Points = 2;
-        t1PointsScored = 0;
-        t2PointsScored = 20;
+        t2Points = 20;
     }else if(disqualification===2){
+        t1Score = 20;
+        t2Score = 0;
         t1Points = 2;
         t2Points = 0;
-        t1PointsScored = 20;
-        t2PointsScored = 0;
     }else{ 
-        t1PointsScored = Math.ceil(Math.random()*(max-min)+min)
-        t2PointsScored = Math.ceil(Math.random()*(max-min)+min)
-        t1Points = t1PointsScored > t2PointsScored ? 2 : 1;
-        t2Points = t1PointsScored < t2PointsScored ? 2 : 1
-    }
- 
-    let team1Update = {
-        games:1,
-        wins: t1Points>t2Points ? 1 : 0,
-        loses: t1Points<t2Points ? 1 : 0,
-        pointsScored: t1PointsScored,
-        pointsConceded: t2PointsScored,
-        pointDifference: t1PointsScored-t2PointsScored
-    }
-    let team2Update = {
-        games:1,
-        wins: t2Points>t1Points ? 1 : 0,
-        loses: t2Points<t1Points ? 1 : 0,
-        pointsScored: t2PointsScored,
-        pointsConceded: t1PointsScored,
-        pointDifference: t2PointsScored-t1PointsScored
+        t1Score = Math.ceil(Math.random()*(team1Max-team1Min)+team1Min)
+        t2Score = Math.ceil(Math.random()*(team2Max-team2Min)+team2Min)
+        if(t1Score===t2Score){
+            t1Score += team1.FIBARanking < team2.FIBARanking ? 1 : -1; 
+        }
+        t1Points = t1Score > t2Score ? 2 : 1;
+        t2Points = t1Score < t2Score ? 2 : 1
+        
     }
 
-    if(stage==="groupStage"){
-        team1Update = {...team1Update, points: t1Points}
-        team2Update = {...team2Update, points: t2Points}
+    const [winnerScored,looserScored] = [t1Score,t2Score].sort((a,b)=>b-a)
+    const [winnerPoints,looserPoints] = [t1Points,t2Points].sort((a,b)=>b-a)
+
+    let winnerUpdate = {
+        games:1,
+        wins: 1,
+        pointsScored: winnerScored,
+        pointsConceded: looserScored,
+        pointDifference: winnerScored-looserScored
+    }
+    let looserUpdate = {
+        games:1,
+        loses: 1,
+        pointsScored: looserScored,
+        pointsConceded: winnerScored,
+        pointDifference: looserScored-winnerScored
     }
 
-    updateTeamStats(tournament, team1.ISOCode, team1Update, stage)
-    updateTeamStats(tournament, team2.ISOCode, team2Update, stage)
+    if(stage===stagesDefinitions.groupStage){
+        winnerUpdate = {...winnerUpdate, points: winnerPoints}
+        looserUpdate = {...looserUpdate, points: looserPoints}
+    }
+
+    if(t1Score>t2Score){
+        winnerTeam = {...team1}
+        looserTeam = {...team2}
+    }else{
+        winnerTeam = {...team2}
+        looserTeam = {...team1}
+    }
+
+    updateTeamStats(tournament, winnerTeam.ISOCode, winnerUpdate, stage);
+    updateTeamStats(tournament, looserTeam.ISOCode, looserUpdate, stage);
 
     let matchData = {
-        [team1.ISOCode]:{
-            team: team1.Team,
-            score: t1PointsScored
+        [winnerTeam.ISOCode]:{
+            team: winnerTeam.Team,
+            score: winnerScored
         },
-        [team2.ISOCode]:{
-            team: team2.Team,
-            score: t2PointsScored
+        [looserTeam.ISOCode]:{
+            team: looserTeam.Team,
+            score: looserScored
         },
         info
     }
@@ -217,12 +238,46 @@ quarterFinalsMatches.forEach((pot,i) => {
     })
 })
 
-const quarterfinalsMatchesPot1 = quarterFinalsMatches.filter(q => q.info.pot===1)
-const quarterfinalsMatchesPot2 = quarterFinalsMatches.filter(q => q.info.pot===2)
+const semifinalists1 = []
+const semifinalists2 = []
+
+tournament.stages.quarterfinals.forEach(team => {
+    if(team.info.pot===1){
+        semifinalists1.push(Object.keys(team)[0])
+    }else{
+        semifinalists2.push(Object.keys(team)[0])
+    }
+})
 
 
-console.log(tournament.stages.quarterfinals)
+console.log(semifinalists1)
+console.log(semifinalists2)
 
-console.log("matchedTeams",quarterFinalsMatches)
+// console.log("matchedTeams",quarterFinalsMatches)
 
-console.log("groupStageList",groupStageList) 
+// console.log("groupStageList",groupStageList) 
+
+const team1 = {
+    "Team": "Srbija",
+    "ISOCode": "SRB",
+    "FIBARanking": 4
+  };
+  const team2 = {
+    "Team": "Južni Sudan",
+    "ISOCode": "SSD",
+    "FIBARanking": 34
+  }
+
+  const team3 = {
+    "Team": "Puerto Riko",
+    "ISOCode": "PRI",
+    "FIBARanking": 16
+  }
+  const team4 = {
+    "Team": "Sjedinjene Države",
+    "ISOCode": "USA",
+    "FIBARanking": 1
+  }
+
+
+// console.log("teams",tournament.teams)

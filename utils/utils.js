@@ -1,4 +1,5 @@
 import groups from "../data/groups.json" assert { type: "json" };
+import exibitions from "../data/exibitions.json" assert { type: "json" };
 
 export const groupsKeys = Object.keys(groups)
 
@@ -78,4 +79,31 @@ export const areMatchedBefore = (pairedPositions, groupStageList, groupStage) =>
         match.hasOwnProperty(team1) &&
         match.hasOwnProperty(team2)
     )
+}
+
+export const getResultRange = (team,tournament) => {
+    let totalExibitionsScored = 0;
+    let totalExibitionsAgaints = 0;
+    let totalExibitionsMatches = 0;
+
+    exibitions[team.ISOCode].forEach((match,i) => {
+        const[pointsScored, pointsAgainst] = match.Result.split('-').map(Number)
+        totalExibitionsScored += pointsScored;
+        totalExibitionsAgaints += pointsAgainst;
+        totalExibitionsMatches = i+1;
+    })
+
+    const teamStats = tournament.teams[team.ISOCode]?.overallStats || {};
+    const teamScored = (teamStats.pointsScored || 0) + totalExibitionsScored;
+    const teamGames = (teamStats.games || 0) + totalExibitionsMatches;
+    const teamPointDifference = (teamStats.pointDifference || 0) + totalExibitionsScored - totalExibitionsAgaints;
+    const teamAvgScored = teamScored ? Math.floor(teamScored/teamGames) : 0;
+    const teamAvgPointDifference = Math.floor(teamPointDifference/teamGames);
+
+    const deductionPercent = Math.floor(0.5*team.FIBARanking) + (teamAvgScored<=60 ? 0 : 5)
+    const additionPercent = (teamPointDifference>1 ? 1 : 0) + teamAvgScored>=100 ? 5 : 10;
+    
+    const min = teamAvgScored - Math.floor(teamAvgScored*deductionPercent/100);
+    const max = teamAvgScored + Math.floor(teamAvgScored*additionPercent/100);
+    return [min,max]
 }
