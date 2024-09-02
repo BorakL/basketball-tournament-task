@@ -1,6 +1,6 @@
 import groups from "./data/groups.json" assert { type: "json" };
 import { groupStageMatches, pots, stagesDefinitions, teamInitStatistics } from "./definitions/definitions.js";
-import { getResultRange, pairTeams, sortGroupTeams, sortTeams } from "./utils/utils.js";
+import { display, displayEliminationPhase, displayGroupStageMatches, displayGroupStageStats, displayPots, getResultRange, pairTeams, sortGroupTeams, sortTeams } from "./utils/utils.js";
 
 const groupsKeys = Object.keys(groups)
 
@@ -21,7 +21,7 @@ const tournament = {
         semifinals: [],
         finals: [] 
     }, 
-    teams: {...teams}
+    teams: JSON.parse(JSON.stringify(teams))
 } 
 
 
@@ -103,7 +103,6 @@ const addMatch = (tournament, match, stage) => {
 
 
 const match = (team1, team2, tournament, info) => {
-
     let [team1Min, team1Max] = getResultRange(team1,tournament);
     let [team2Min,team2Max] = getResultRange(team2,tournament);
     const luckFactor = Math.floor(Math.random()*10);
@@ -123,9 +122,9 @@ const match = (team1, team2, tournament, info) => {
 
     if(disqualification===1){ 
         t1Score = 0;
-        t2Score = 2;
+        t2Score = 20;
         t1Points = 0;
-        t2Points = 20;
+        t2Points = 2;
     }else if(disqualification===2){
         t1Score = 20;
         t2Score = 0;
@@ -139,7 +138,6 @@ const match = (team1, team2, tournament, info) => {
         }
         t1Points = t1Score > t2Score ? 2 : 1;
         t2Points = t1Score < t2Score ? 2 : 1
-        
     }
 
     const [winnerScored,looserScored] = [t1Score,t2Score].sort((a,b)=>b-a)
@@ -177,107 +175,123 @@ const match = (team1, team2, tournament, info) => {
     updateTeamStats(tournament, looserTeam.ISOCode, looserUpdate, stage);
 
     let matchData = {
-        [winnerTeam.ISOCode]:{
+        winner: {
             team: winnerTeam.Team,
+            ISOCode: winnerTeam.ISOCode,
             score: winnerScored
         },
-        [looserTeam.ISOCode]:{
+        looser: {
             team: looserTeam.Team,
+            ISOCode: looserTeam.ISOCode,
             score: looserScored
         },
         info
     }
-
     addMatch(tournament, matchData, stage)
 }
 
  
-groupStageMatches.forEach((round,i) => {
-    round.forEach((positions) => 
-        groupsKeys.forEach(g => 
-            match(
-                groups[g][positions[0]-1], 
-                groups[g][positions[1]-1], 
-                tournament, 
-                {stage: stagesDefinitions.groupStage, round:i+1, group:g }
+
+const playTournament = (tournament) => {
+    groupStageMatches.forEach((round,i) => {
+        round.forEach((positions) => 
+            groupsKeys.forEach(g => 
+                match(
+                    groups[g][positions[0]-1], 
+                    groups[g][positions[1]-1], 
+                    tournament, 
+                    {stage: stagesDefinitions.groupStage, round:i+1, group:g }
+                )
             )
         )
-    )
-})
-
-const sortedGroupTeams = sortGroupTeams(tournament)
-
-const firstInGroups = [];
-const secondInGroups = [];
-const thirdInGroups = [];
-
-sortedGroupTeams.forEach(g => {
-    firstInGroups.push(g[0]);
-    secondInGroups.push(g[1]);
-    thirdInGroups.push(g[2]);
-})
-
-const storedBetweenGroups = [firstInGroups,secondInGroups,thirdInGroups];
-
-const groupStageList = {};
-let i = 1;
-storedBetweenGroups.forEach(g => {
-    let sortedTeams = sortTeams(g);
-    sortedTeams.forEach(s => {
-        groupStageList[i]=s;
-        i++;
     })
-})
+    
+    const sortedGroupTeams = sortGroupTeams(tournament)
 
-const quarterFinalsMatches = pots.map(matches => pairTeams(matches, groupStageList, tournament.stages.groupStage))
-quarterFinalsMatches.forEach((pot,i) => {
-    pot.forEach(m => {
-        let team1 = groupStageList[m[0]]
-        let team2 = groupStageList[m[1]]
-        match(team1,team2,tournament,{pot:i+1, stage: stagesDefinitions.quarterfinals})
+    displayGroupStageMatches(tournament.stages.groupStage)
+    displayGroupStageStats(sortedGroupTeams);
+    
+    const firstInGroups = [];
+    const secondInGroups = [];
+    const thirdInGroups = [];
+    
+    sortedGroupTeams.forEach(g => {
+        firstInGroups.push(g[0]);
+        secondInGroups.push(g[1]);
+        thirdInGroups.push(g[2]);
     })
-})
+    
+    const storedBetweenGroups = [firstInGroups,secondInGroups,thirdInGroups];
+    
+    const groupStageList = {};
+    let i = 1;
+    storedBetweenGroups.forEach(g => {
+        let sortedTeams = sortTeams(g);
+        sortedTeams.forEach(s => {
+            groupStageList[i]=s;
+            i++;
+        })
+    })
+     
+    displayPots(pots, groupStageList)
 
-const semifinalists1 = []
-const semifinalists2 = []
+    const quarterFinalsMatches = pots.map(pairPots => pairTeams(pairPots, groupStageList, tournament.stages.groupStage))
+    quarterFinalsMatches.forEach((pot,i) => {
+        pot.forEach(m => {
+            let team1 = groupStageList[m[0]]
+            let team2 = groupStageList[m[1]]
+            match(team1,team2,tournament,{pot:i+1, stage: stagesDefinitions.quarterfinals})
+        })
+    })
 
-tournament.stages.quarterfinals.forEach(team => {
-    if(team.info.pot===1){
-        semifinalists1.push(Object.keys(team)[0])
-    }else{
-        semifinalists2.push(Object.keys(team)[0])
-    }
-})
+    displayEliminationPhase("Eliminaciona faza",tournament.stages.quarterfinals,false);
+    displayEliminationPhase("Četvrtfinale",tournament.stages.quarterfinals,true);
+    
+    const semifinalists1=[];
+    const semifinalists2=[];
+    tournament.stages.quarterfinals.forEach(match => {
+        if(match.info.pot===1){
+            semifinalists1.push(teams[match.winner.ISOCode])
+        }else{
+            semifinalists2.push(teams[match.winner.ISOCode])
+        }
+    })
+    match(...semifinalists1, tournament, {stage:stagesDefinitions.semifinals})
+    match(...semifinalists2, tournament, {stage:stagesDefinitions.semifinals})
+    displayEliminationPhase("Polufinale",tournament.stages.semifinals,true);
+
+    
+    const finalists = [];
+    const thirdPlace = [];
+    tournament.stages.semifinals.forEach(match => {
+        finalists.push(teams[match.winner.ISOCode]);
+        thirdPlace.push(teams[match.looser.ISOCode]);
+    })
+    match(...finalists, tournament, {stage: stagesDefinitions.finals})
+    match(...thirdPlace, tournament, {stage: stagesDefinitions.finals, thirdPlace:true})
+    const finals = tournament.stages?.finals;
+    const thirdPlaceMatch = finals.filter(f => f.info?.thirdPlace)
+    const finalsMatch = finals.filter(f => !f.info?.thirdPlace)
+    displayEliminationPhase("Utakmica za treće mesto",thirdPlaceMatch,true);
+    displayEliminationPhase("Finale",finalsMatch,true);
+    
+    let standings = "Medalje: \n";
+    finals.forEach(match => {
+      if(!match.info.thirdPlace) {
+        standings += `1. ${match.winner?.team} \n`;
+        standings += `2. ${match.looser?.team} \n`;
+      } else {
+        standings += `3. ${match.looser?.team} \n`;
+      }
+    });
+    tournament.standings = standings
+    display(tournament.standings)
+
+}
+
+playTournament(tournament)
 
 
-console.log(semifinalists1)
-console.log(semifinalists2)
-
-// console.log("matchedTeams",quarterFinalsMatches)
-
-// console.log("groupStageList",groupStageList) 
-
-const team1 = {
-    "Team": "Srbija",
-    "ISOCode": "SRB",
-    "FIBARanking": 4
-  };
-  const team2 = {
-    "Team": "Južni Sudan",
-    "ISOCode": "SSD",
-    "FIBARanking": 34
-  }
-
-  const team3 = {
-    "Team": "Puerto Riko",
-    "ISOCode": "PRI",
-    "FIBARanking": 16
-  }
-  const team4 = {
-    "Team": "Sjedinjene Države",
-    "ISOCode": "USA",
-    "FIBARanking": 1
-  }
+// console.log("tournament",tournament)
 
 
-// console.log("teams",tournament.teams)

@@ -1,5 +1,6 @@
 import groups from "../data/groups.json" assert { type: "json" };
 import exibitions from "../data/exibitions.json" assert { type: "json" };
+import { romanNumber } from "../definitions/definitions.js";
 
 export const groupsKeys = Object.keys(groups)
 
@@ -15,6 +16,7 @@ export const findMatchResults = (team1,team2,groupStage) => {
     return 0;
 }
 
+//Sort all teams inside each group
 export const sortGroupTeams = (tournament) => {
     return groupsKeys.map(key => {
         let group = Object.values(tournament.teams).filter(t => t.group===key)
@@ -56,14 +58,15 @@ export const shuffleArray = (array) => {
     return shuffledArray;
 }
 
-export const pairTeams = (pots, groupStageList, groupStage) => {
+export const pairTeams = (pairPots, groupStageList, groupStage) => {
     let i = Math.floor(Math.random()*2)
     let j = i===0 ? 1 : 0
-    let pairedPositions1 = [pots[0][i], pots[1][i]];
-    let pairedPositions2 = [pots[0][j], pots[1][j]];
+    const potsArr = Object.values(pairPots)
+    let pairedPositions1 = [potsArr[0][i], potsArr[1][i]];
+    let pairedPositions2 = [potsArr[0][j], potsArr[1][j]]; 
     return !areMatchedBefore(pairedPositions1,groupStageList,groupStage)
             ? [pairedPositions1,pairedPositions2] 
-            : [[pots[0][i], pots[1][j]], [pots[0][j], pots[1][i]] ]
+            : [[potsArr[0][i], potsArr[1][j]], [potsArr[0][j], potsArr[1][i]] ]
 }
 
 export const areMatchedBefore = (pairedPositions, groupStageList, groupStage) => {
@@ -106,4 +109,86 @@ export const getResultRange = (team,tournament) => {
     const min = teamAvgScored - Math.floor(teamAvgScored*deductionPercent/100);
     const max = teamAvgScored + Math.floor(teamAvgScored*additionPercent/100);
     return [min,max]
+}
+
+export const displayGroupStageMatches = (matches) => {
+    let output = '';
+    for(let i=1; i<=3; i++){
+        output += `Grupna faza - ${romanNumber[i-1]} kolo: \n`
+        groupsKeys.forEach(group => {
+            output += `\t Grupa ${group}: \n`;
+            const groupMatches = matches.filter(m => m.info.group === group && m.info.round===i) || {}
+            groupMatches.forEach(match=>{
+                output += `\t\t ${match.winner?.team} - ${match.looser?.team} (${match.winner?.score}:${match.looser?.score}) \n`    
+            })
+        })
+        output += `\n`;
+    }
+    console.log(output)
+}
+
+export const displayGroupStageStats = (groups) => {
+    groups.forEach((group, index) => {
+        console.log(`Grupa ${String.fromCharCode(65 + index)}:`);
+        console.log("Tim                | Pobede | Porazi | Bodovi | Postignuti koševi | Primljeni koševi | Koš razlika");
+        console.log("-----------------------------------------------------------------------------------------------------");
+        
+        group.forEach(team => {
+            const stats = team.groupStageStats;
+            console.log(
+                `${team.Team.padEnd(18)} | ` +
+                `${stats.wins.toString().padEnd(6)} | ` +
+                `${stats.loses.toString().padEnd(6)} | ` +
+                `${stats.points.toString().padEnd(6)} | ` +
+                `${stats.pointsScored.toString().padEnd(17)} | ` +
+                `${stats.pointsConceded.toString().padEnd(16)} | ` +
+                `${stats.pointDifference.toString().padEnd(17)} `
+            );
+        });
+        console.log("\n");
+    });
+}
+
+
+export const displayPots = (pots,groupStageList) => {
+    let listPots = {}
+    pots.forEach(pot => {
+        for(let key in pot){
+            listPots[key] = pot[key]
+        }
+    })
+    const potsKeys = Object.keys(listPots)
+    const sortedPots = potsKeys
+        .sort()
+        .reduce((acc, key) => {
+            acc[key] = listPots[key];
+            return acc;
+        }, {});
+    let output = "Šeširi: \n"; 
+    potsKeys.forEach( key => {
+        const pot = sortedPots[key] || [];
+        output += `\t Šešir ${key} \n`;
+        output += `\t\t  ${groupStageList[pot[0]].Team} \n`;
+        output += `\t\t  ${groupStageList[pot[1]].Team} \n`;
+    })
+    console.log(output)
+}
+
+
+export const displayEliminationPhase = (title,phase,result) => {
+    let output = `${title}: \n`;
+    phase.forEach( match => {
+        const team1 = match.winner?.team;
+        const team2 = match.looser?.team;
+        const team1Score = match.winner?.score;
+        const team2Score = match.looser?.score;
+        const scores = `(${team1Score}:${team2Score})`;
+        output += `\t ${team1} - ${team2} ${result ? scores : ""} \n`;
+    })
+    output += "\n";
+    console.log(output)
+}
+
+export const display = (output) => {
+    console.log(output)
 }
