@@ -1,3 +1,15 @@
+import groups from "../data/groups.json" assert { type: "json" };
+
+export const groupsKeys = Object.keys(groups);
+
+export const getTeams = () => {
+    const teams = {};
+    groupsKeys.forEach(group => groups[group].forEach(team => 
+        teams[team.ISOCode] = {...team, group}
+    ))
+    return teams;
+}
+
 export const groupStageMatches = [
     [[1,4], [2,3]], 
     [[1,3], [2,4]],
