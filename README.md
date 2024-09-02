@@ -19,9 +19,9 @@ Ovaj projekat simulira košarkaški turnir za Olimpijske igre koristeći JavaScr
 - `groups.json`: Podaci o timovima (nazivi, ISO-3166 kodovi, FIBA rang).
 - `exhibitions.json` (Bonus): Rezultati prijateljskih utakmica za proračun forme timova.
 
-## Postavljanje
+## Instalacija
 
-1. **Kloni repozitorijum:**
+1. **Kloniraj repozitorijum:**
 
     ```bash
     git clone https://github.com/BorakL/basketball-tournament-task.git
